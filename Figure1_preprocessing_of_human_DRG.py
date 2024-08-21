@@ -522,7 +522,7 @@ Plot(adataR).QCmap( clims= {'n_genes_by_counts':8000, 'total_counts':10000, 'pct
 
 import sys
 import importlib
-sys.path.append('/share/home/zhonw/JupyterCode')
+sys.path.append('/share/home/JupyterCode')
 import SCFunc
 importlib.reload(SCFunc)
 from SCFunc import *
@@ -564,7 +564,7 @@ Plot(adataR).QCplot(groupby='SID', header='after', outdir='./scafterQC')
 # In[7]:
 
 
-OUTR = '/gpfs2/wulab17/WorkSpace/11Project/02DRG/01Analysis/Human/20220421/Scanoramav1/60'
+OUTR = '/02DRG/01Analysis/Human/20220421/Scanoramav1/60'
 os.makedirs(OUTR, exist_ok=True)
 os.chdir(OUTR)
 
@@ -572,7 +572,7 @@ adataraw = sc.read(f'{OUTR}/annotation/adata.Scanorama.60.h5ad')
 #adataraw = sc.read('/gpfs2/wulab17/WorkSpace/11Project/02DRG/01Analysis/Human/20220421/Scanoramav1/60/SubTypes/progenitor2receptors/Scanorama/60/adata.Scanorama.60.h5ad')
 adataraw = adataraw.raw.to_adata().copy()
 
-hsadata = '/gpfs2/wulab17/WorkSpace/11Project/02DRG/01Analysis/Human/20220421/hs.adata.raw.h5ad'
+hsadata = '/02DRG/01Analysis/Human/20220421/hs.adata.raw.h5ad'
 hsadata = sc.read_h5ad(hsadata)
 
 adataraw.raw = hsadata[adataraw.obs_names, adataraw.var_names]
@@ -586,7 +586,7 @@ sc.pl.umap(adataraw, color=['CellType','Clusters'] )
 # In[6]:
 
 
-OUTR = '/gpfs2/wulab17/WorkSpace/11Project/02DRG/01Analysis/Human/20220421/RawView'
+OUTR = '/02DRG/01Analysis/Human/20220421/RawView'
 os.makedirs(OUTR, exist_ok=True)
 os.chdir(OUTR)
 #adatahs.write('hs.adata.raw.h5ad')
@@ -660,165 +660,6 @@ groupby='SID'
 adata = Preprocession(adataR.copy()).NormScale(batch_key=groupby, isnormal=True, isscale=True, dropMT=True, 
                                                minnbat=3, min_mean=0.035, min_disp=0.4, max_mean=6)
 Unsupervise(adata).RawCheck(batch_key=groupby, outdir='./Nointegrate')
-
-
-# - **Scanorama**
-
-# In[ ]:
-
-
-BATCH='Scanorama'
-Res=5
-groupby='SID'
-CellType='CellType'
-MARKERS = MA.V()
-
-louvain=f'louvain_{Res :.2f}'
-leiden=f'leiden_{Res :.2f}'
-COLS = [groupby, louvain, leiden]
-    
-min_dist=0.3
-
-OUT = f'{OUTR}/{BATCH}'
-
-adata = Preprocession(adataR.copy()).NormScale(batch_key=groupby, isnormal=True, isscale=False,
-                                               dropMT=True, dropRibo=False,
-                                               minnbat=4, min_mean=0.04, min_disp=0.4, max_mean=6)
-
-for NPCS in range(50, 61,10):
-    iOUT = '%s/%s'%(OUT,NPCS)
-    os.makedirs(iOUT, exist_ok=True)
-    os.chdir(iOUT)
-    
-    adataI = Integretion(adata).SCANO(NPCS=NPCS, batch_key=groupby, batch_size=8000, 
-                                      n_neighbors=40, knn=40, alpha=0.1, sigma=100)
-                
-    adataI = Unsupervise(adataI).MAP(batch_key=groupby, NPCS=NPCS, method=BATCH,Res=Res, min_dist=min_dist)
-    
-    sc.pl.umap(adataI, color=['GW','leiden'], save=f'.{BATCH}.{NPCS}.GW.leiden.umap.png')
-
-    my_cmap=PlotUti().continuous_cmap(["lightgrey", 'yellow', 'red','darkred'])
-    sc.pl.umap(adataI, color=[i for i in MARKERS if i in adataI.raw.var.index], ncols=9, color_map=my_cmap, 
-               show=False, save=f'.{BATCH}.{NPCS}.gene.classic.umap.min_dist{min_dist}.png')
-    
-    adataI = Unsupervise(adataI).Clust(clust=['leiden', 'louvain'])
-    adataI = Unsupervise(adataI).Add23d(method='umap', npcs=3, min_dist=min_dist)
-
-    AA = Ply(adataI).SData(obms='X_umap_3d', method='umap', groups=[groupby, leiden, louvain])
-    Ply(adataI).Scatter3ds(AA, header = 'umap.%s.%s.%s'%(BATCH, NPCS, Res))
-
-    muscle=['DES','TTN','MYL2','MYH3','PAX7','MYOG','PITX1','PITX3','PAX3','PITX2','MYF5','MYF6','MYOD',
-            'CXCR4','SDC3','ITGA7','FGFR4','ACTA2','RGS5','TAGLN','MCAM','ANPEP','CNN1','S100A4','TNC']
-    mtgene = adataI.raw.var_names[adataI.raw.var_names.str.startswith('MT-')]
-    ribogene = adataI.raw.var_names[adataI.raw.var_names.str.contains('^RP[SL]', regex=True)]
-    QCgene= list(mtgene) + list(ribogene)
-
-    geneList = MA.V() + MB.V() + QCgene + muscle + sum(markdict.values(),[])
-
-    os.makedirs(f'{iOUT}/gene_3d', exist_ok=True)
-    os.chdir(f'{iOUT}/gene_3d')
-    px_cmap=[(0,"lightgrey"), (0.33,'yellow'), (0.67,'red'), (1,'darkred')]
-
-    AA = Ply(adataI).SData(obms='X_umap_3d', method='umap', groups=geneList)
-
-    Ply(adataI).Scatter3ds(AA, colormap=px_cmap, show=False, header = 'umap.%s.%s.%s'%(BATCH, NPCS, Res))
-    os.makedirs(f'{iOUT}/cluters', exist_ok=True)
-    os.chdir(f'{iOUT}/cluters')
-    for i in range(2,9):
-        for c in ['leiden', 'louvain']:
-            iclust = f'{c}_{i}.00'
-            sc.pl.umap(adataI, color=iclust, legend_fontsize =10, show=False, save=f'.{iclust}.2d.pdf')
-            AA = Ply(adataI).SData(obms='X_umap', method='umap', groups=[iclust])
-            Ply(adataI).Scatter2ds(AA, show=False, header= 'umap.%s.%s.%s'%(BATCH, NPCS, iclust))
-            AA = Ply(adataI).SData(obms='X_umap_3d', method='umap', groups=[iclust])
-            Ply(adataI).Scatter3ds(AA, show=False, header= 'umap.%s.%s.%s'%(BATCH, NPCS, iclust))
-    
-    os.chdir(iOUT)
-    IOs().saveadata(adataI, f'{BATCH}.{NPCS}', todense=True)
-
-
-#
-
-
-from scipy.sparse import csr_matrix
-import dbmap as dm
-data = csr_matrix(adataI.X) 
-diff = dm.diffusion.Diffusor(ann_dist='euclidean', #'cosine', 'jaccard', 'hamming' 
-                             knn_dist='euclidean',
-                             kernel_use= 'decay_adaptive', #'decay_adaptive',
-                             n_jobs=15,
-                             n_neighbors=40, 
-                             n_components=120,
-                             transitions=False, norm=False).fit(data)
-
-min_dist = 0.3
-db = diff.transform(data)
-db = np.array(db)
-res = diff.return_dict()
-adataI.obsm['X_db'] = db
-
-import matplotlib.pyplot as plt
-plt.plot(range(0, len(res['EigenValues'])), res['EigenValues'], marker='o')
-
-
-# In[ ]:
-
-
-# I Diffusion graph layout with UMAP 
-import umap
-db_umap_emb = umap.UMAP(n_components=2, min_dist = 0.5, n_neighbors=30).fit_transform(db)
-adataI.obsm['X_dbmap'] = db_umap_emb
-sc.pl.embedding(adataI, basis ='X_dbmap', color='CellType') 
-
-# II Diffusion graph layout with PaCMAP on the diffusion basis
-db_pac_emb = dm.pacmapper.PaCMAP(n_dims=2, n_neighbors=50, MN_ratio=3, FP_ratio=.5) 
-db_pac_emb_fit = db_pac_emb.fit_transform(db, init='random')
-adataI.obsm['X_db_pacmap'] = db_pac_emb_fit
-sc.pl.embedding(adataI, basis ='X_db_pacmap', color='CellType')
-
-# III
-sc.pp.neighbors(adataI, n_neighbors=15, use_rep='X_db', metric='euclidean')
-sc.tl.umap(adataI, min_dist=0.3)
-sc.pl.umap(adataI, color='CellType')
-
-# IV
-import pymde #pytorch 3.10 error
-#https://topxometry.readthedocs.io/en/latest/welcome.html
-mde = pymde.preserve_neighbors(db, embedding_dim=2, verbose=True, constraint=pymde.Standardized())
-adataI.obsm['X_db_pymde'] = mde.embed(verbose=True).numpy()
-#mde.embed(snapshot_every=1)
-#mde.play(savepath='test.pymde.gif')
-sc.pl.embedding(adataI, basis ='X_db_pymde', color='CellType') 
-
-
-# In[ ]:
-
-
-mde = pymde.preserve_neighbors(db, embedding_dim=3, verbose=True, constraint=pymde.Standardized())
-adataI.obsm['X_db_pymde_3d'] = mde.embed(verbose=True).numpy()
-AA = Ply(adataI).SData(obms='X_db_pymde_3d', method='umap', groups=['CellType'])
-Ply(adataI).Scatter3ds(AA, show=True)
-
-
-# In[ ]:
-
-
-db_umap_emb_3d = umap.UMAP(n_components=3, min_dist = min_dist).fit_transform(db)
-adataI.obsm['X_dbmap_3d'] = db_umap_emb_3d
-AA = Ply(adataI).SData(obms='X_dbmap_3d', method='umap', groups=['CellType'])
-Ply(adataI).Scatter3ds(AA, show=True)
-
-
-# In[ ]:
-
-
-db_pac_emb_3d = dm.pacmapper.PaCMAP(n_dims=3, n_neighbors=50, MN_ratio=5, FP_ratio=.5) 
-adataI.obsm['X_db_pacmap_3d'] = db_pac_emb_3d.fit_transform(db, init='random')
-AA = Ply(adataI).SData(obms='X_db_pacmap_3d', method='umap', groups=['CellType'])
-Ply(adataI).Scatter3ds(AA, show=True)
-
-
-# In[ ]:
 
 
 
