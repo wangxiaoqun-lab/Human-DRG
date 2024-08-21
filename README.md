@@ -1,1 +1,1 @@
-R scripts for the analysis of embryonic human DRG
+R scripts for the analyses of embryonic human DRG
