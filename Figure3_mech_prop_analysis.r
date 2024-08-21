@@ -77,7 +77,7 @@ pan.seurat[['RNA']] <- CreateAssayObject(data  = as.matrix(mech@assays$RNA@data)
 
 DefaultAssay(pan.seurat)<-'scanorama'
 
-pan.seurat <- FindNeighbors(pan.seurat, dims = 1:15) 
+pan.seurat <- FindNeighbors(pan.seurat, dims = 1:8) 
 FindClusters(pan.seurat)
 #FindAllMarkers(pan.seurat)
 
